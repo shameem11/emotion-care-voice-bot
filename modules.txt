@@ -1,0 +1,120 @@
+## Model Training
+
+def model_train():
+    loader = PDFMinerLoader(filename)
+    documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=200)
+    texts = text_splitter.split_documents(documents)
+    text_list = [ texts[i].page_content for i in range(len(texts)) ]
+    embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+
+    embedded_texts = [ embeddings.embed_query(text) for text in text_list]
+    
+    index = pc.Index(index_name)
+    for ids , vect in enumerate(embedded_texts) :
+       
+       index.upsert(vectors=[
+        {
+        "id" : str(ids) , 
+        "values" : vect ,
+           
+        "metadata" : {   
+            "text" : text_list[ids]
+        }
+        }
+    ], namespace = "np10"
+                     )
+
+    return
+
+
+
+
+##  Emotion Detection 
+
+webcam=cv2.VideoCapture(0)
+labels = {0 : 'angry', 1 : 'disgust', 2 : 'fear', 3 : 'happy', 4 : 'neutral', 5 : 'sad', 6 : 'surprise'}
+while True:
+    i,im=webcam.read()
+    gray=cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+    faces=face_cascade.detectMultiScale(im,1.3,5)
+    try: 
+        for (p,q,r,s) in faces:
+            image = gray[q:q+s,p:p+r]
+            cv2.rectangle(im,(p,q),(p+r,q+s),(255,0,0),2)
+            image = cv2.resize(image,(48,48))
+            img = extract_features(image)
+            pred = model.predict(img)
+            prediction_label = labels[pred.argmax()]
+            cv2.putText(im, '% s' %(prediction_label), (p-10, q-10),cv2.FONT_HERSHEY_COMPLEX_SMALL,2, (0,0,255))
+        cv2.imshow("Output",im)
+        cv2.waitKey(27)
+
+
+
+##  Sentiment Analysis 
+
+
+def get_sentiment(text):
+
+    scores = analyzer.polarity_scores(text)
+    sentiment = "None"
+    if scores['neu'] > scores['pos']  and scores['neu']  > scores['neg']:
+        return sentiment
+    elif scores['pos']  > scores['neg'] :
+        return "Positive"
+    else : 
+        return "Negative"
+
+
+## Predict whether the text is Question or Statement
+
+def predict(text):
+    
+    featuresets = [(dialogue_act_features(post.text), post.get('class')) for post in posts]
+    size = int(len(featuresets) * 0.0000001)
+    train_set, test_set = featuresets[size:], featuresets[:size]
+    classifier = nltk.NaiveBayesClassifier.train(train_set)
+    nltk.classify.accuracy(classifier, test_set)
+    return classifier.classify(dialogue_act_features(text))
+
+
+
+## Chatbot Answer Process 
+
+
+def process_answer(instruction):
+    embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    index = pc.Index(index_name)
+
+    text = instruction
+    
+    text_embed = embeddings.embed_query(text)
+    get_response = index.query(
+        namespace = "np10",
+        vector = text_embed,
+        top_k =  5,
+        includeMetadata = True
+
+    )
+    
+    meta = [ i.metadata['text'] for i in  get_response.matches]
+    print(meta)
+    
+    pipe = pipeline(
+        'text2text-generation',
+        model = base_model,
+        tokenizer = tokenizer,
+        max_length = 256,
+        do_sample = True,
+        temperature = 0.3,
+        top_p= 0.20,
+    )
+    local_llm = HuggingFacePipeline(pipeline=pipe)
+    
+    chain = load_qa_chain(local_llm , chain_type="stuff")
+    ans = chain.run(input_documents = meta , question = text)
+    
+    return ans
+
+
