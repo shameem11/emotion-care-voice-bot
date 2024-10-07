@@ -97,28 +97,7 @@ ans = chain.run(input_documents=meta, question=text)
 
     
 print(ans)
-#translator =Trans
-#print(translator.translate(text = 'what is my name ' , dest = 'ta').text)
 
-    ## CHROMA DB 
-    
-#     for ids , vect in enumerate(embedded_texts) :
-#        collection.add(
-#     embeddings = vect ,
-#     metadatas=[{"source": text_list[ids]}],
-#     ids=ids
-# )
-    # quest = "hello"
-    # chain = load_qa_chain(local_llm , chain_type="stuff")
-    # ans = chain.run( , question = quest)
-    # print(ans)
- 
-    
-    
-#     results = collection.query(
-#     query_texts=["Who is abdul ? "],
-#     n_results=5
-# )
 
 if __name__ == "__main__":
     main()
